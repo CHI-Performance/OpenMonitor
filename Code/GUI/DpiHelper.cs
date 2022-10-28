@@ -19,7 +19,8 @@ namespace OpenHardwareMonitor.GUI {
     private static double deviceDpi;
     public static double DeviceDpi {
       get {
-        if (deviceDpi == 0.0) {
+        if (deviceDpi == 0.0)
+        {
           try {
             using (Graphics g = Graphics.FromHwnd(IntPtr.Zero)) {
               deviceDpi = g.DpiX;
