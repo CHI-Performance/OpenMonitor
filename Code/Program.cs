@@ -36,10 +36,14 @@ namespace OpenHardwareMonitor {
 
       Application.EnableVisualStyles();
       Application.SetCompatibleTextRenderingDefault(false);
-      using (GUI.MainForm form = new GUI.MainForm()) {
-        form.FormClosed += delegate(Object sender, FormClosedEventArgs e) {
+
+      using (GUI.MainForm form = new GUI.MainForm())
+      {
+        form.FormClosed += delegate(Object sender, FormClosedEventArgs e)
+        {
           Application.Exit();
-        };        
+        };
+
         Application.Run();
       }
     }
@@ -99,10 +103,15 @@ namespace OpenHardwareMonitor {
     public static void Application_ThreadException(object sender, 
       ThreadExceptionEventArgs e) 
     {
-      try {
+      try
+      {
         ReportException(e.Exception);
-      } catch {
-      } finally {
+      }
+      catch
+      {
+      }
+      finally
+      {
         Application.Exit();
       }
     }
@@ -110,12 +119,18 @@ namespace OpenHardwareMonitor {
     public static void CurrentDomain_UnhandledException(object sender, 
       UnhandledExceptionEventArgs args) 
     {
-      try {
+      try
+      {
         Exception e = args.ExceptionObject as Exception;
         if (e != null)
           ReportException(e);
-      } catch {
-      } finally {
+      }
+      catch
+      {
+
+      }
+      finally
+      {
         Environment.Exit(0);
       }
     }   

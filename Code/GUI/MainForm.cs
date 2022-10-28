@@ -38,12 +38,8 @@ namespace OpenHardwareMonitor.GUI {
     private SystemTray systemTray;    
     private StartupManager startupManager = new StartupManager();
     private UpdateVisitor updateVisitor = new UpdateVisitor();
-    private SensorGadget gadget;
-    private Form plotForm;
-    private PlotPanel plotPanel;
 
     private UserOption showHiddenSensors;
-    private UserOption showPlot;
     private UserOption showValue;
     private UserOption showMin;
     private UserOption showMax;
@@ -59,12 +55,7 @@ namespace OpenHardwareMonitor.GUI {
     private UserOption readFanControllersSensors;
     private UserOption readHddSensors;
 
-    private UserOption showGadget;
-    private UserRadioGroup plotLocation;
     private WmiProvider wmiProvider;
-
-    private UserOption runWebServer;
-    private HttpServer server;
 
     private UserOption logSensors;
     private UserRadioGroup loggingInterval;
@@ -95,15 +86,9 @@ namespace OpenHardwareMonitor.GUI {
       BufferedGraphicsManager.Current.MaximumBuffer =
         Screen.PrimaryScreen.Bounds.Size;  
 
-      // set the DockStyle here, to avoid conflicts with the MainMenu
-      this.splitContainer.Dock = DockStyle.Fill;
             
       this.Font = SystemFonts.MessageBoxFont;
       treeView.Font = SystemFonts.MessageBoxFont;
-
-      plotPanel = new PlotPanel(settings, unitManager);
-      plotPanel.Font = SystemFonts.MessageBoxFont;
-      plotPanel.Dock = DockStyle.Fill;
       
       nodeCheckBox.IsVisibleValueNeeded += nodeCheckBox_IsVisibleValueNeeded;
       nodeTextBoxText.DrawText += nodeTextBoxText_DrawText;
@@ -139,12 +124,8 @@ namespace OpenHardwareMonitor.GUI {
       if (Hardware.OperatingSystem.IsUnix) { // Unix
         treeView.RowHeight = Math.Max(treeView.RowHeight,
           DpiHelper.LogicalToDeviceUnits(18)); 
-        splitContainer.BorderStyle = BorderStyle.None;
-        splitContainer.Border3DStyle = Border3DStyle.Adjust;
-        splitContainer.SplitterWidth = 4;
+     
         treeView.BorderStyle = BorderStyle.Fixed3D;
-        plotPanel.BorderStyle = BorderStyle.Fixed3D;
-        gadgetMenuItem.Visible = false;
         minCloseMenuItem.Visible = false;
         minTrayMenuItem.Visible = false;
         startMinMenuItem.Visible = false;
@@ -152,10 +133,7 @@ namespace OpenHardwareMonitor.GUI {
         treeView.RowHeight = Math.Max(treeView.Font.Height +
           DpiHelper.LogicalToDeviceUnits(1),
           DpiHelper.LogicalToDeviceUnits(18)); 
-
-        gadget = new SensorGadget(computer, settings, unitManager);
-        gadget.HideShowCommand += hideShowClick;
-
+        
         wmiProvider = new WmiProvider(computer);
       }
 
@@ -267,31 +245,12 @@ namespace OpenHardwareMonitor.GUI {
         computer.HDDEnabled = readHddSensors.Value;
       };
 
-      showGadget = new UserOption("gadgetMenuItem", false, gadgetMenuItem,
-        settings);
-      showGadget.Changed += delegate(object sender, EventArgs e) {
-        if (gadget != null) 
-          gadget.Visible = showGadget.Value;
-      };
 
       celsiusMenuItem.Checked = 
         unitManager.TemperatureUnit == TemperatureUnit.Celsius;
       fahrenheitMenuItem.Checked = !celsiusMenuItem.Checked;
 
-      server = new HttpServer(root, this.settings.GetValue("listenerPort", 8085));
-      if (server.PlatformNotSupported) {
-        webMenuItemSeparator.Visible = false;
-        webMenuItem.Visible = false;
-      }
 
-      runWebServer = new UserOption("runWebServerMenuItem", false,
-        runWebServerMenuItem, settings);
-      runWebServer.Changed += delegate(object sender, EventArgs e) {
-        if (runWebServer.Value)
-          server.StartHTTPListener();
-        else
-          server.StopHTTPListener();
-      };
 
       logSensors = new UserOption("logSensorsMenuItem", false, logSensorsMenuItem,
         settings);
@@ -320,8 +279,6 @@ namespace OpenHardwareMonitor.GUI {
         }
       };
 
-      InitializePlotForm();
-
       startupMenuItem.Visible = startupManager.IsAvailable;
       
       if (startMinMenuItem.Checked) {
@@ -340,8 +297,7 @@ namespace OpenHardwareMonitor.GUI {
       Microsoft.Win32.SystemEvents.SessionEnded += delegate {
         computer.Close();
         SaveConfiguration();
-        if (runWebServer.Value) 
-          server.Quit();
+        
       };
     }
 
@@ -353,102 +309,6 @@ namespace OpenHardwareMonitor.GUI {
       }
     }
 
-    private void InitializePlotForm() {
-      plotForm = new Form();
-      plotForm.FormBorderStyle = FormBorderStyle.SizableToolWindow;
-      plotForm.ShowInTaskbar = false;
-      plotForm.StartPosition = FormStartPosition.Manual;
-      this.AddOwnedForm(plotForm);
-      plotForm.Bounds = new Rectangle {
-        X = settings.GetValue("plotForm.Location.X", -100000),
-        Y = settings.GetValue("plotForm.Location.Y", 100),
-        Width = settings.GetValue("plotForm.Width", 600),
-        Height = settings.GetValue("plotForm.Height", 400)
-      };
-
-      showPlot = new UserOption("plotMenuItem", false, plotMenuItem, settings);
-      plotLocation = new UserRadioGroup("plotLocation", 0,
-        new[] { plotWindowMenuItem, plotBottomMenuItem, plotRightMenuItem },
-        settings);
-
-      showPlot.Changed += delegate(object sender, EventArgs e) {
-        if (plotLocation.Value == 0) {
-          if (showPlot.Value && this.Visible)
-            plotForm.Show();
-          else
-            plotForm.Hide();
-        } else {
-          splitContainer.Panel2Collapsed = !showPlot.Value;
-        }
-        treeView.Invalidate();
-      };
-      plotLocation.Changed += delegate(object sender, EventArgs e) {
-        switch (plotLocation.Value) {
-          case 0:
-            splitContainer.Panel2.Controls.Clear();
-            splitContainer.Panel2Collapsed = true;
-            plotForm.Controls.Add(plotPanel);
-            if (showPlot.Value && this.Visible)
-              plotForm.Show();
-            break;
-          case 1:
-            plotForm.Controls.Clear();
-            plotForm.Hide();
-            splitContainer.Orientation = Orientation.Horizontal;
-            splitContainer.Panel2.Controls.Add(plotPanel);
-            splitContainer.Panel2Collapsed = !showPlot.Value;
-            break;
-          case 2:
-            plotForm.Controls.Clear();
-            plotForm.Hide();
-            splitContainer.Orientation = Orientation.Vertical;
-            splitContainer.Panel2.Controls.Add(plotPanel);
-            splitContainer.Panel2Collapsed = !showPlot.Value;
-            break;
-        }
-      };
-
-      plotForm.FormClosing += delegate(object sender, FormClosingEventArgs e) {
-        if (e.CloseReason == CloseReason.UserClosing) {
-          // just switch off the plotting when the user closes the form
-          if (plotLocation.Value == 0) {
-            showPlot.Value = false;
-          }
-          e.Cancel = true;
-        }
-      };
-
-      EventHandler moveOrResizePlotForm = delegate(object sender, EventArgs e) {
-        if (plotForm.WindowState != FormWindowState.Minimized) {
-          settings.SetValue("plotForm.Location.X", plotForm.Bounds.X);
-          settings.SetValue("plotForm.Location.Y", plotForm.Bounds.Y);
-          settings.SetValue("plotForm.Width", plotForm.Bounds.Width);
-          settings.SetValue("plotForm.Height", plotForm.Bounds.Height);
-        }
-      };
-      plotForm.Move += moveOrResizePlotForm;
-      plotForm.Resize += moveOrResizePlotForm;
-
-      plotForm.VisibleChanged += delegate(object sender, EventArgs e) {
-        Rectangle bounds = new Rectangle(plotForm.Location, plotForm.Size);
-        Screen screen = Screen.FromRectangle(bounds);
-        Rectangle intersection =
-          Rectangle.Intersect(screen.WorkingArea, bounds);
-        if (intersection.Width < Math.Min(16, bounds.Width) ||
-            intersection.Height < Math.Min(16, bounds.Height)) {
-          plotForm.Location = new Point(
-            screen.WorkingArea.Width / 2 - bounds.Width / 2,
-            screen.WorkingArea.Height / 2 - bounds.Height / 2);
-        }
-      };
-
-      this.VisibleChanged += delegate(object sender, EventArgs e) {
-        if (this.Visible && showPlot.Value && plotLocation.Value == 0)
-          plotForm.Show();
-        else
-          plotForm.Hide();
-      };
-    }
 
     private void InsertSorted(Collection<Node> nodes, HardwareNode node) {
       int i = 0;
@@ -491,14 +351,15 @@ namespace OpenHardwareMonitor.GUI {
 
     private void nodeTextBoxText_DrawText(object sender, DrawEventArgs e) {       
       Node node = e.Node.Tag as Node;
-      if (node != null) {
-        Color color;
-        if (node.IsVisible) {
+      if (node != null)
+        {
+        if (node.IsVisible)
+        {
           SensorNode sensorNode = node as SensorNode;
-          if (plotMenuItem.Checked && sensorNode != null &&
-            sensorPlotColors.TryGetValue(sensorNode.Sensor, out color))
-            e.TextColor = color;
-        } else {
+
+        }
+        else
+        {
           e.TextColor = Color.DarkGray;
         }
       }
@@ -551,7 +412,7 @@ namespace OpenHardwareMonitor.GUI {
       }
 
       sensorPlotColors = colors;
-      plotPanel.SetSensors(selected, colors);
+
     }
 
     private void nodeTextBoxText_EditorShowing(object sender,
@@ -565,7 +426,7 @@ namespace OpenHardwareMonitor.GUI {
     private void nodeCheckBox_IsVisibleValueNeeded(object sender, 
       NodeControlValueEventArgs e) {
       SensorNode node = e.Node.Tag as SensorNode;
-      e.Value = (node != null) && plotMenuItem.Checked;
+      e.Value = (node != null);
     }
 
     private void exitClick(object sender, EventArgs e) {
@@ -576,10 +437,8 @@ namespace OpenHardwareMonitor.GUI {
     private void timer_Tick(object sender, EventArgs e) {
       computer.Accept(updateVisitor);
       treeView.Invalidate();
-      plotPanel.InvalidatePlot();
+      
       systemTray.Redraw();
-      if (gadget != null)
-        gadget.Redraw();
 
       if (wmiProvider != null)
         wmiProvider.Update();
@@ -596,16 +455,7 @@ namespace OpenHardwareMonitor.GUI {
       if (settings == null)
         return;
 
-      if (plotPanel != null) {
-        plotPanel.SetCurrentSettings();
-        foreach (TreeColumn column in treeView.Columns)
-          settings.SetValue("treeView.Columns." + column.Header + ".Width",
-            column.Width);
-      }
 
-      if (server != null) {
-        this.settings.SetValue("listenerPort", server.ListenerPort);
-      }
 
       string fileName = Path.ChangeExtension(
           System.Windows.Forms.Application.ExecutablePath, ".config");
@@ -658,8 +508,6 @@ namespace OpenHardwareMonitor.GUI {
       timer.Enabled = false;            
       computer.Close();
       SaveConfiguration();
-      if (runWebServer.Value)
-          server.Quit();
       systemTray.Dispose();
     }
 
@@ -738,18 +586,7 @@ namespace OpenHardwareMonitor.GUI {
             };
             treeContextMenu.MenuItems.Add(item);
           }
-          if (gadget != null) {
-            MenuItem item = new MenuItem("Show in Gadget");
-            item.Checked = gadget.Contains(node.Sensor);
-            item.Click += delegate(object obj, EventArgs args) {
-              if (item.Checked) {
-                gadget.Remove(node.Sensor);
-              } else {
-                gadget.Add(node.Sensor);
-              }
-            };
-            treeContextMenu.MenuItems.Add(item);
-          }
+          
           if (node.Sensor.Control != null) {
             treeContextMenu.MenuItems.Add(new MenuItem("-"));
             IControl control = node.Sensor.Control;
@@ -922,13 +759,8 @@ namespace OpenHardwareMonitor.GUI {
       selectionDragging = false;
     }
 
-    private void serverPortMenuItem_Click(object sender, EventArgs e) {
-      new PortForm(this).ShowDialog();
-    }
+    private void splitContainer_Panel2_Paint(object sender, PaintEventArgs e) {
 
-    public HttpServer Server {
-      get { return server; }
     }
-
   }
 }
